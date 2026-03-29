@@ -1,57 +1,29 @@
-name: Daily Task Automation
+name: Daily Task Reminder
 
 on:
   schedule:
-    # Runs every day at 5:30 AM IST (00:00 UTC)
-    - cron: '0 0 * * *'
-  workflow_dispatch: # Allows manual trigger
+    - cron: '0 0 * * *'  # Runs daily at 5:30 AM IST (midnight UTC)
+  workflow_dispatch:
 
 jobs:
-  create-daily-issue:
+  remind:
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      contents: read
-    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Calculate current day
-        id: day-calc
+      - name: Create Daily Reminder Issue
         run: |
-          START_DATE="2026-04-07"
-          CURRENT_DATE=$(date +%Y-%m-%d)
-          DAYS_DIFF=$(( ( $(date -d "$CURRENT_DATE" +%s) - $(date -d "$START_DATE" +%s) ) / 86400 ))
-          DAY_NUM=$((DAYS_DIFF + 1))
-          echo "day_num=$DAY_NUM" >> $GITHUB_OUTPUT
-          echo "Current Day: $DAY_NUM"
-      
-      - name: Create Daily Issue
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const dayNum = ${{ steps.day-calc.outputs.day_num }};
-            
-            // Read task data from tasks directory
-            const fs = require('fs');
-            const path = require('path');
-            const taskFile = path.join(process.env.GITHUB_WORKSPACE, 'tasks', `day-${dayNum}.md`);
-            
-            if (!fs.existsSync(taskFile)) {
-              console.log(`No task file found for day ${dayNum}`);
-              return;
-            }
-            
-            const taskContent = fs.readFileSync(taskFile, 'utf8');
-            
-            // Create issue
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `Day ${dayNum} - Daily Tasks`,
-              body: taskContent,
-              labels: ['daily-task', `month-${Math.ceil(dayNum/30)}`]
-            });
-            
-            console.log(`Created issue for Day ${dayNum}`);
+          DAY_NUM=$(( ( $(date +%s) - $(date -d "2026-04-07" +%s) ) / 86400 + 1 ))
+          
+          if [ $DAY_NUM -lt 1 ] || [ $DAY_NUM -gt 240 ]; then
+            echo "Not in active period (Day $DAY_NUM)"
+            exit 0
+          fi
+          
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/issues \
+            -d "{
+              \"title\": \"Day $DAY_NUM - Daily Tasks\",
+              \"body\": \"**Day $DAY_NUM of 240**\n\n## Today's Tasks:\n\n**Hour 1 (6:00-7:00 AM):** DSA/LeetCode\n**Hour 2 (7:00-8:00 AM):** Theory\n**Hour 3-5 (9:00 PM-12:00 AM):** Project Work\n\nView full details: https://github.com/${{ github.repository }}/blob/main/tasks/day-$DAY_NUM.md\",
+              \"labels\": [\"daily-task\"]
+            }"
