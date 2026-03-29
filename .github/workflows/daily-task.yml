@@ -1,0 +1,57 @@
+name: Daily Task Automation
+
+on:
+  schedule:
+    # Runs every day at 5:30 AM IST (00:00 UTC)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  create-daily-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Calculate current day
+        id: day-calc
+        run: |
+          START_DATE="2026-04-07"
+          CURRENT_DATE=$(date +%Y-%m-%d)
+          DAYS_DIFF=$(( ( $(date -d "$CURRENT_DATE" +%s) - $(date -d "$START_DATE" +%s) ) / 86400 ))
+          DAY_NUM=$((DAYS_DIFF + 1))
+          echo "day_num=$DAY_NUM" >> $GITHUB_OUTPUT
+          echo "Current Day: $DAY_NUM"
+      
+      - name: Create Daily Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const dayNum = ${{ steps.day-calc.outputs.day_num }};
+            
+            // Read task data from tasks directory
+            const fs = require('fs');
+            const path = require('path');
+            const taskFile = path.join(process.env.GITHUB_WORKSPACE, 'tasks', `day-${dayNum}.md`);
+            
+            if (!fs.existsSync(taskFile)) {
+              console.log(`No task file found for day ${dayNum}`);
+              return;
+            }
+            
+            const taskContent = fs.readFileSync(taskFile, 'utf8');
+            
+            // Create issue
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Day ${dayNum} - Daily Tasks`,
+              body: taskContent,
+              labels: ['daily-task', `month-${Math.ceil(dayNum/30)}`]
+            });
+            
+            console.log(`Created issue for Day ${dayNum}`);
