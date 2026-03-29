@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Create Daily Reminder Issue
         run: |
-          DAY_NUM=$(( ( $(date +%s) - $(date -d "2026-04-07" +%s) ) / 86400 + 1 ))
+          DAY_NUM=$(( ( $(date +%s) - $(date -d "2026-04-01" +%s) ) / 86400 + 1 ))
           
           if [ $DAY_NUM -lt 1 ] || [ $DAY_NUM -gt 240 ]; then
             echo "Not in active period (Day $DAY_NUM)"
